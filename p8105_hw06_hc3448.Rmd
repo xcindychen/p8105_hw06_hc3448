@@ -75,14 +75,30 @@ bootstrap_df |> head(5) |> knitr::kable()
 ggplot(bootstrap_df, aes(x = adj.r.squared)) +
       geom_density()
 ```
+The distribution of the estimates for r squared seems like a normal distribution with mean between 0.91 and 0.92, and range between 0.88 and 0.94.
 
 ```{r}
 ggplot(bootstrap_df, aes(x = log_beta)) +
       geom_density()
 ```
+The distribution of the estimates for log(B0*B1) seems like a normal distribution with mean between 2.00 and 2.05, and range between 1.925 and 2.10.
+
+```{r}
+bootstrap_df |> 
+  summarize(
+    r_squared_25 = quantile(adj.r.squared, probs = 0.025),
+    r_squared_975 = quantile(adj.r.squared, probs = 0.975),
+    log_beta_25 = quantile(log_beta, probs = 0.025),
+    log_beta_975 = quantile(log_beta, probs = 0.975),
+  ) |> knitr::kable(digit = 3)
+```
+
+
+
 ## Problem 2
 
 ```{r}
 
 ```
+
 
