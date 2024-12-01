@@ -54,7 +54,7 @@ bootstrap_df =
   weather_df |> 
   modelr::bootstrap(5000) |> 
   mutate(
-    models = map(strap, \(df) lm(tmax ~ tmin, data = df)),
+    models = map(strap, \(x) lm(tmax ~ tmin, data = x)),
     glance_result = map(models, broom::glance),
     tidy_result = map(models, broom::tidy)
   ) |> 
@@ -75,12 +75,14 @@ bootstrap_df |> head(5) |> knitr::kable()
 ggplot(bootstrap_df, aes(x = adj.r.squared)) +
       geom_density()
 ```
+
 The distribution of the estimates for r squared seems like a normal distribution with mean between 0.91 and 0.92, and range between 0.88 and 0.94.
 
 ```{r}
 ggplot(bootstrap_df, aes(x = log_beta)) +
       geom_density()
 ```
+
 The distribution of the estimates for log(B0*B1) seems like a normal distribution with mean between 2.00 and 2.05, and range between 1.925 and 2.10.
 
 ```{r}
@@ -97,8 +99,84 @@ bootstrap_df |>
 
 ## Problem 2
 
+```{r message = FALSE, warning = FALSE}
+homicide_df = 
+  read_csv("data/homicide-data.csv") |> 
+  mutate(
+    city_state = paste(city, state, sep = ", "),
+    solved = ifelse(disposition == "Closed by arrest", 1, 0),
+    victim_age = as.numeric(victim_age)
+  ) |> 
+  filter(
+    !(city_state %in% c("Dallas, TX", "Phoenix, AZ", "Kansas City, MO", "Tulsa, AL")),
+    victim_race %in% c("White", "Black")
+  ) 
+```
+
+```{r}
+baltimore_glm = 
+  homicide_df |>
+  filter(city_state == "Baltimore, MD")|>
+  glm(solved ~ victim_age + victim_sex + victim_race, 
+      data = _,
+      family = binomial())
+
+baltimore_results = 
+  baltimore_glm |>
+  broom::tidy() |>
+  filter(term == "victim_sexMale") |>
+  mutate(
+    OR = exp(estimate),
+    CI_upper = exp(estimate + 1.96 * std.error),
+    CI_lower = exp(estimate - 1.96 * std.error)
+  ) 
+
+baltimore_results |> knitr::kable(digit = 3)
+```
+```{r}
+homicide_glm = 
+  homicide_df |>
+  nest(data = -city_state) |> 
+  mutate(
+    models = purrr::map(data, \(x) glm(solved ~ victim_age + victim_sex + victim_race, data = x, family = binomial())),
+    results = purrr::map(models, broom::tidy)
+    )|>
+  select(-data, -models) |> 
+  unnest(results)
+  
+
+homicide_results = 
+  homicide_glm |>
+  filter(term == "victim_sexMale") |>
+  mutate(
+    OR = exp(estimate),
+    CI_upper = exp(estimate + 1.96 * std.error),
+    CI_lower = exp(estimate - 1.96 * std.error)
+  ) |>
+  select(city_state, OR, CI_upper, CI_lower)
+
+homicide_results |> knitr::kable(digit = 3)
+```
+
+```{r fig.width=10, fig.height=6}
+homicide_results |>
+  ggplot(aes(x = OR , y = reorder(city_state, OR))) +
+  geom_point() +
+  geom_errorbar((aes(xmin = CI_lower, xmax = CI_upper))) +
+  labs(
+    title = "Estimated ORs and CIs for each city",
+    x = "Odds Ratio",
+    y = "City, State"
+  )
+```
+
+
+From the plot, we can see that except for Albuquerque, Stockton, Fresno, Nashville, Richmond, and Atlanta, other cities have odds ratio below 1. It suggests that in these cities, males compared to females are less likely to have their homicides solved. However, the error bars for the cities with higher odds ratio (Albuquerque, Stockton, Fresno) are large, and it indicates the uncertainty of the true adjusted odds ratio.
+
+  
+## Problem 3
+
 ```{r}
 
 ```
-
 
