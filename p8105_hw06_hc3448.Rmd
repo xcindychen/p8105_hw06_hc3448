@@ -7,10 +7,7 @@ output: github_document
 
 ```{r setup, include=FALSE}
 library(tidyverse)
-#library(p8105.datasets)
 library(modelr)
-#library(readr)
-#library(GGally)
 
 set.seed(1)
 
@@ -176,7 +173,100 @@ From the plot, we can see that except for Albuquerque, Stockton, Fresno, Nashvil
   
 ## Problem 3
 
-```{r}
+```{r message = FALSE}
+bw_df = 
+  read_csv("data/birthweight.csv") |>
+  janitor::clean_names() |>
+  mutate(
+    babysex =as.factor( case_match(babysex, 1~ "male", 2~ "female")),
+    frace = as.factor(case_match(frace,
+                1 ~ "white", 
+                2 ~ "black", 
+                3 ~ "asian",
+                4 ~ "puerto rican", 
+                8 ~ "other",
+                9 ~ "unknown")),
+     mrace = as.factor(case_match(mrace,
+            1 ~ "white", 
+            2 ~ "black", 
+            3 ~ "asian",
+            4 ~ "puerto rican", 
+            8 ~ "other")),
+    malform = as.factor(case_match(malform,
+                 0 ~ "absent",
+                 1 ~ "present"))
+  )
+  
+``` 
+Number of missing data: `sum(is.na(bw_df))`. 
 
+My proposed regression model for birthweight: I created the model using the main effects of factors that I hypothesized to be highly correlated with the outcome: gaweeks, bhead, blength, mrace, and wtgain.
+
+```{r}
+bw_model = lm(bwt ~ gaweeks + bhead + blength + mrace + wtgain, data = bw_df)
+summary(bw_model)
 ```
 
+```{r}
+plot_model = 
+  bw_df |>
+  modelr::add_predictions(bw_model) |>
+  modelr::add_residuals(bw_model) |>
+  ggplot(aes(x = pred, y = resid)) +
+  geom_point(alpha = 0.5) +
+  labs(
+    x = "Predicted Values",
+    y = "Residuals"
+  )
+
+plot_model
+```
+
+The other two models for comparisons:
+
+```{r message = FALSE}
+bw_model_1 = lm(bwt ~ blength + gaweeks, data = bw_df)
+bw_model_2 = lm(bwt ~ bhead + blength + babysex + bhead*blength + bhead*babysex + blength*babysex + bhead*blength*babysex , data = bw_df)
+```
+
+
+```{r}
+cv_df = 
+  crossv_mc(bw_df, 100) |>
+  mutate(
+    train = map(train, as_tibble),
+    test = map(test, as_tibble)
+  )
+
+cv_result_df = 
+  cv_df |> 
+  mutate(
+    model = map(train, \(x) lm(bwt ~ gaweeks + bhead + blength + mrace + wtgain, data = x)),
+    model1 = map(train, \(x) lm(bwt ~ blength + gaweeks, data = x)),
+    model2 = map(train, \(x) lm(bwt ~ bhead + blength + babysex + bhead*blength + bhead*babysex + blength*babysex + bhead*blength*babysex, data = x))
+  ) |> 
+  mutate(
+    rmse_model = map2_dbl(model, test, rmse),
+    rmse_model1 = map2_dbl(model1, test, rmse),
+    rmse_model2 = map2_dbl(model2, test, rmse)
+  )
+  
+```
+
+```{r}
+plot_cv_result = 
+  cv_result_df |>
+  select(starts_with("rmse")) |>
+  pivot_longer(
+    everything(),
+    names_to = "model", 
+    values_to = "rmse",
+    names_prefix = "rmse_",
+  ) |>
+  ggplot(aes(x = model, y = rmse)) + 
+  geom_violin()
+
+plot_cv_result
+```
+
+The model (my proposed model) has the lowest rmse, indicating better predictive accuracy compared to model 1 and model 2.
